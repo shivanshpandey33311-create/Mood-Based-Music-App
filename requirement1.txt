@@ -1,6 +1,0 @@
-streamlit
-spotipy
-scikit-learn
-pandas
-numpy
-python-dotenv
