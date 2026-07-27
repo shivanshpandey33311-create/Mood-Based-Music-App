@@ -1,19 +1,87 @@
 import requests
+import streamlit as st
 
 
-def search_deezer(query, limit=10):
-    url = "https://api.deezer.com/search"
+def get_query(emotion, language):
+
+    queries = {
+
+        "sad": {
+            "Hindi": "Hindi Bollywood sad songs",
+            "English": "English sad songs",
+            "Both": "Hindi Bollywood sad songs English sad songs"
+        },
+
+        "happy": {
+            "Hindi": "Hindi Bollywood happy songs",
+            "English": "English happy songs",
+            "Both": "Hindi Bollywood happy songs English happy songs"
+        },
+
+        "love": {
+            "Hindi": "Hindi Bollywood romantic love songs",
+            "English": "English romantic love songs",
+            "Both": "Hindi Bollywood romantic songs English romantic songs"
+        },
+
+        "angry": {
+            "Hindi": "Hindi Bollywood energetic songs",
+            "English": "English energetic intense songs",
+            "Both": "Hindi energetic songs English intense songs"
+        },
+
+        "fear": {
+            "Hindi": "Hindi calming peaceful songs",
+            "English": "English calming peaceful songs",
+            "Both": "Hindi calming songs English calming songs"
+        },
+
+        "surprise": {
+            "Hindi": "Hindi Bollywood energetic songs",
+            "English": "English energetic songs",
+            "Both": "Hindi energetic songs English energetic songs"
+        }
+    }
+
+    return queries.get(
+        emotion,
+        queries["happy"]
+    ).get(
+        language,
+        queries["happy"]["Both"]
+    )
+
+
+def search_youtube(
+    emotion,
+    language="Both",
+    max_results=10
+):
+
+    api_key = st.secrets["YOUTUBE_API_KEY"]
+
+    query = get_query(
+        emotion,
+        language
+    )
+
+    url = "https://www.googleapis.com/youtube/v3/search"
 
     params = {
+        "part": "snippet",
         "q": query,
-        "limit": limit
+        "type": "video",
+        "videoCategoryId": "10",
+        "maxResults": max_results,
+        "key": api_key
     }
 
     try:
+
         response = requests.get(
             url,
             params=params,
-            timeout=10
+            timeout=15
         )
 
         if response.status_code != 200:
@@ -23,62 +91,24 @@ def search_deezer(query, limit=10):
 
         songs = []
 
-        for track in data.get("data", []):
+        for item in data.get("items", []):
+
+            video_id = item["id"].get("videoId")
+
+            if not video_id:
+                continue
 
             songs.append({
-                "title": track.get("title", "Unknown"),
-                "artist": track.get("artist", {}).get(
-                    "name",
-                    "Unknown"
-                ),
-                "album": track.get("album", {}).get(
-                    "title",
-                    "Unknown"
-                ),
-                "cover": track.get(
-                    "album",
-                    {}
-                ).get(
-                    "cover_medium"
-                ),
-                "preview": track.get("preview"),
-                "link": track.get("link")
+                "title": item["snippet"]["title"],
+                "channel": item["snippet"]["channelTitle"],
+                "video_id": video_id,
+                "video_url": (
+                    f"https://www.youtube.com/watch?v={video_id}"
+                )
             })
 
         return songs
 
     except requests.RequestException:
+
         return []
-
-
-def get_songs(mood, language="Both", limit=10):
-
-    if language == "Hindi":
-
-        query = f"Hindi Bollywood {mood} songs"
-
-        return search_deezer(
-            query,
-            limit
-        )
-
-    if language == "English":
-
-        query = f"English {mood} songs"
-
-        return search_deezer(
-            query,
-            limit
-        )
-
-    hindi_songs = search_deezer(
-        f"Hindi Bollywood {mood} songs",
-        5
-    )
-
-    english_songs = search_deezer(
-        f"English {mood} songs",
-        5
-    )
-
-    return hindi_songs + english_songs
