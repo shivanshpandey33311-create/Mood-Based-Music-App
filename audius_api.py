@@ -1,18 +1,5 @@
 import random
 import re
-import requests
-
-
-
-
-
-BASE_URL = "https://api.audius.co/v1"
-
-REQUEST_TIMEOUT = 15
-
-CANDIDATES_PER_QUERY = 50
-
-MAX_PAGES_PER_QUERY = 3
 
 
 EMOTION_CONFIG = {
