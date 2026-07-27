@@ -1,21 +1,55 @@
+import os
 import pickle
 import streamlit as st
 
 
-MODEL_FILE = "emotion_model.pkl"
-VECTORIZER_FILE = "tfidf_vectorizer 2.pkl"
+MODEL_PATH = "emotion_model.pkl"
+VECTORIZER_PATH = "tfidf_vectorizer 2.pkl"
 
 
 @st.cache_resource
 def load_model():
 
-    with open(MODEL_FILE, "rb") as file:
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(
+            f"{MODEL_PATH} was not found."
+        )
+
+    if not os.path.exists(VECTORIZER_PATH):
+        raise FileNotFoundError(
+            f"{VECTORIZER_PATH} was not found."
+        )
+
+    with open(MODEL_PATH, "rb") as file:
         model = pickle.load(file)
 
-    with open(VECTORIZER_FILE, "rb") as file:
+    with open(VECTORIZER_PATH, "rb") as file:
         vectorizer = pickle.load(file)
 
     return model, vectorizer
+
+
+def normalize_emotion(value):
+
+    value = str(value).strip().lower()
+
+    mapping = {
+        "sadness": "sad",
+        "sad": "sad",
+        "joy": "happy",
+        "happy": "happy",
+        "happiness": "happy",
+        "love": "love",
+        "loving": "love",
+        "anger": "angry",
+        "angry": "angry",
+        "fear": "fear",
+        "afraid": "fear",
+        "surprise": "surprise",
+        "surprised": "surprise"
+    }
+
+    return mapping.get(value, value)
 
 
 def detect_emotion(text):
@@ -30,27 +64,16 @@ def detect_emotion(text):
 
     if hasattr(model, "predict_proba"):
 
-        probabilities = model.predict_proba(text_vector)[0]
+        probabilities = model.predict_proba(
+            text_vector
+        )[0]
 
-        confidence = max(probabilities) * 100
+        confidence = float(
+            max(probabilities) * 100
+        )
 
-    emotion = str(prediction).lower()
-
-    emotion_map = {
-        "sadness": "sad",
-        "sad": "sad",
-        "joy": "happy",
-        "happy": "happy",
-        "love": "love",
-        "anger": "angry",
-        "angry": "angry",
-        "fear": "fear",
-        "surprise": "surprise"
-    }
-
-    emotion = emotion_map.get(
-        emotion,
-        emotion
+    emotion = normalize_emotion(
+        prediction
     )
 
     return emotion, confidence
