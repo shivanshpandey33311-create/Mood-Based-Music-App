@@ -1,6 +1,6 @@
 import streamlit as st
 from emotion_model import detect_emotion
-from youtube_api import search_youtube
+from audius_api import get_songs
 
 st.set_page_config(
     page_title="Mood-Based Music Recommendation",
@@ -34,27 +34,35 @@ if st.button("Recommend Songs", type="primary"):
     st.session_state["emotion"] = emotion
     st.session_state["confidence"] = confidence
 
-    st.session_state["songs"] = []
-
-    st.success(
-        f"Detected Emotion: {emotion.title()} "
-        f"({confidence:.1f}% confidence)"
-    )
-
     with st.spinner("Finding songs..."):
-
-        songs = search_youtube(
+        songs = get_songs(
             emotion=emotion,
             language=language,
-            max_results=10
+            limit=10
         )
 
     st.session_state["songs"] = songs
 
+    if not songs:
+        st.error(
+            "No matching songs were found. Try another mood or language."
+        )
+        st.stop()
+
+
+if "emotion" in st.session_state:
+
+    st.success(
+        f"Detected Emotion: {st.session_state['emotion'].title()} "
+        f"({st.session_state['confidence']:.1f}% confidence)"
+    )
+
+
 if "songs" in st.session_state and st.session_state["songs"]:
 
     st.subheader(
-        f"Songs for {st.session_state['emotion'].title()} Mood"
+        f"Recommended Songs for "
+        f"{st.session_state['emotion'].title()} Mood"
     )
 
     for index, song in enumerate(st.session_state["songs"]):
@@ -64,17 +72,35 @@ if "songs" in st.session_state and st.session_state["songs"]:
         )
 
         st.write(
-            f"Channel: {song['channel']}"
+            f"Artist: {song['artist']}"
         )
 
-        st.video(
-            song["video_url"]
-        )
+        if song["genre"]:
+            st.write(
+                f"Genre: {song['genre']}"
+            )
+
+        if song["mood"]:
+            st.write(
+                f"Song Mood: {song['mood']}"
+            )
+
+        if song["artwork"]:
+            st.image(
+                song["artwork"],
+                width=220
+            )
+
+        if song["stream_url"]:
+            st.audio(
+                song["stream_url"],
+                format="audio/mpeg"
+            )
+
+        if song["audius_url"]:
+            st.link_button(
+                "Open on Audius",
+                song["audius_url"]
+            )
 
         st.divider()
-
-elif "songs" in st.session_state and not st.session_state["songs"]:
-
-    st.error(
-        "No songs were found. Try another mood or language."
-    )
