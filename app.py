@@ -1,19 +1,20 @@
 import streamlit as st
-from deezer_api import get_songs
+from emotion_model import detect_emotion
+from youtube_api import search_youtube
 
 st.set_page_config(
     page_title="Mood-Based Music Recommendation",
-    page_icon="🎧",
     layout="centered"
 )
 
 st.title("Mood-Based Music Recommendation")
 
-st.write("Write how you feel today:")
+st.write("Tell me how you feel today.")
 
-user_text = st.text_input(
-    "Your mood",
-    placeholder="Example: I am feeling sad today"
+user_text = st.text_area(
+    "Your feelings",
+    placeholder="Example: I am feeling very sad today...",
+    height=120
 )
 
 language = st.selectbox(
@@ -21,102 +22,59 @@ language = st.selectbox(
     ["Both", "Hindi", "English"]
 )
 
-
-def detect_emotion(text):
-    text = text.lower()
-
-    emotion_keywords = {
-        "happy": [
-            "happy", "joy", "joyful", "excited", "good",
-            "great", "awesome", "fun", "cheerful",
-            "खुश", "खुशी", "मज़ा", "उत्साहित"
-        ],
-        "sad": [
-            "sad", "sadness", "unhappy", "depressed",
-            "lonely", "cry", "crying", "hurt",
-            "broken", "low", "upset",
-            "दुखी", "उदास", "अकेला", "रोना", "परेशान"
-        ],
-        "angry": [
-            "angry", "anger", "mad", "furious",
-            "annoyed", "irritated", "hate",
-            "गुस्सा", "क्रोधित", "नाराज़", "चिढ़"
-        ],
-        "romantic": [
-            "love", "romantic", "romance", "loving",
-            "crush", "relationship", "date",
-            "प्यार", "इश्क", "रोमांटिक", "मोहब्बत"
-        ],
-        "calm": [
-            "calm", "peaceful", "relaxed", "relax",
-            "quiet", "peace", "stress free",
-            "शांत", "सुकून", "आराम", "शांति"
-        ],
-        "energetic": [
-            "energetic", "energy", "motivated",
-            "motivation", "power", "active",
-            "dance", "party",
-            "जोश", "ऊर्जा", "मोटिवेशन", "नाचना"
-        ]
-    }
-
-    for emotion, keywords in emotion_keywords.items():
-        for keyword in keywords:
-            if keyword in text:
-                return emotion
-
-    return "happy"
-
-
-if st.button("Recommend Songs"):
+if st.button("Recommend Songs", type="primary"):
 
     if not user_text.strip():
-        st.warning("Please write how you feel first.")
+        st.warning("Please tell me how you feel first.")
         st.stop()
 
-    detected_emotion = detect_emotion(user_text)
+    with st.spinner("Detecting your emotion..."):
+        emotion, confidence = detect_emotion(user_text)
 
-    st.success(f"Detected Emotion: {detected_emotion.title()}")
+    st.session_state["emotion"] = emotion
+    st.session_state["confidence"] = confidence
 
-    songs = get_songs(
-        mood=detected_emotion,
-        language=language,
-        limit=10
+    st.session_state["songs"] = []
+
+    st.success(
+        f"Detected Emotion: {emotion.title()} "
+        f"({confidence:.1f}% confidence)"
     )
 
-    if not songs:
-        st.error("No songs found. Please try another mood.")
-        st.stop()
+    with st.spinner("Finding songs..."):
 
-    st.subheader("Recommended Songs")
-
-    for song in songs:
-
-        st.image(
-            song["cover"],
-            width=250
+        songs = search_youtube(
+            emotion=emotion,
+            language=language,
+            max_results=10
         )
+
+    st.session_state["songs"] = songs
+
+if "songs" in st.session_state and st.session_state["songs"]:
+
+    st.subheader(
+        f"Songs for {st.session_state['emotion'].title()} Mood"
+    )
+
+    for index, song in enumerate(st.session_state["songs"]):
 
         st.markdown(
-            f"### {song['title']}"
+            f"### {index + 1}. {song['title']}"
         )
 
         st.write(
-            f"Artist: {song['artist']}"
+            f"Channel: {song['channel']}"
         )
 
-        st.write(
-            f"Album: {song['album']}"
+        st.video(
+            song["video_url"]
         )
 
-        if song["preview"]:
-            st.audio(song["preview"])
-        else:
-            st.write("Preview not available.")
+        st.divider()
 
-        st.link_button(
-            "Listen on Deezer",
-            song["link"]
-        )
+elif "songs" in st.session_state and not st.session_state["songs"]:
 
-      
+    st.error(
+        "No songs were found. Try another mood or language."
+    )
