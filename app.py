@@ -1,155 +1,122 @@
-import pickle
 import streamlit as st
 from deezer_api import get_songs
 
-with open("emotion_model.pkl", "rb") as f:
-    model = pickle.load(f)
-
-with open("tfidf_vectorizer 2.pkl", "rb") as f:
-    vectorizer = pickle.load(f)
-
-emotion_map = {
-    0: "admiration",
-    1: "amusement",
-    2: "anger",
-    3: "annoyance",
-    4: "approval",
-    5: "caring",
-    6: "confusion",
-    7: "curiosity",
-    8: "desire",
-    9: "disappointment",
-    10: "disapproval",
-    11: "disgust",
-    12: "embarrassment",
-    13: "excitement",
-    14: "fear",
-    15: "gratitude",
-    16: "grief",
-    17: "joy",
-    18: "love",
-    19: "nervousness",
-    20: "optimism",
-    21: "pride",
-    22: "realization",
-    23: "relief",
-    24: "remorse",
-    25: "sadness",
-    26: "surprise",
-    27: "neutral"
-}
-
-mood_map = {
-    "admiration": "admiration",
-    "amusement": "happy",
-    "anger": "angry",
-    "annoyance": "angry",
-    "approval": "happy",
-    "caring": "calm",
-    "confusion": "calm",
-    "curiosity": "energetic",
-    "desire": "romantic",
-    "disappointment": "sad",
-    "disapproval": "sad",
-    "disgust": "angry",
-    "embarrassment": "sad",
-    "excitement": "energetic",
-    "fear": "calm",
-    "gratitude": "happy",
-    "grief": "sad",
-    "joy": "happy",
-    "love": "romantic",
-    "nervousness": "calm",
-    "optimism": "happy",
-    "pride": "energetic",
-    "realization": "calm",
-    "relief": "calm",
-    "remorse": "sad",
-    "sadness": "sad",
-    "surprise": "energetic",
-    "neutral": "chill"
-}
+st.set_page_config(
+    page_title="Mood-Based Music Recommendation",
+    page_icon="🎧",
+    layout="centered"
+)
 
 st.title("Mood-Based Music Recommendation")
 
-user_text = st.text_area("Write how you feel today:")
+st.write("Write how you feel today:")
 
-if st.button("Detect Emotion & Recommend"):
+user_text = st.text_input(
+    "Your mood",
+    placeholder="Example: I am feeling sad today"
+)
 
-    if user_text.strip() == "":
-        st.warning("Please write something first!")
+language = st.selectbox(
+    "Choose music language",
+    ["Both", "Hindi", "English"]
+)
 
-    else:
-        X_vec = vectorizer.transform([user_text])
 
-        probs = model.predict_proba(X_vec)[0]
+def detect_emotion(text):
+    text = text.lower()
 
-        emotions = model.classes_
+    emotion_keywords = {
+        "happy": [
+            "happy", "joy", "joyful", "excited", "good",
+            "great", "awesome", "fun", "cheerful",
+            "खुश", "खुशी", "मज़ा", "उत्साहित"
+        ],
+        "sad": [
+            "sad", "sadness", "unhappy", "depressed",
+            "lonely", "cry", "crying", "hurt",
+            "broken", "low", "upset",
+            "दुखी", "उदास", "अकेला", "रोना", "परेशान"
+        ],
+        "angry": [
+            "angry", "anger", "mad", "furious",
+            "annoyed", "irritated", "hate",
+            "गुस्सा", "क्रोधित", "नाराज़", "चिढ़"
+        ],
+        "romantic": [
+            "love", "romantic", "romance", "loving",
+            "crush", "relationship", "date",
+            "प्यार", "इश्क", "रोमांटिक", "मोहब्बत"
+        ],
+        "calm": [
+            "calm", "peaceful", "relaxed", "relax",
+            "quiet", "peace", "stress free",
+            "शांत", "सुकून", "आराम", "शांति"
+        ],
+        "energetic": [
+            "energetic", "energy", "motivated",
+            "motivation", "power", "active",
+            "dance", "party",
+            "जोश", "ऊर्जा", "मोटिवेशन", "नाचना"
+        ]
+    }
 
-        top_idx = probs.argmax()
+    for emotion, keywords in emotion_keywords.items():
+        for keyword in keywords:
+            if keyword in text:
+                return emotion
 
-        detected_emotion = emotions[top_idx]
+    return "happy"
 
-        try:
-            emotion_number = int(detected_emotion)
-            emotion_name = emotion_map.get(
-                emotion_number,
-                str(detected_emotion)
-            )
-        except (ValueError, TypeError):
-            emotion_name = str(detected_emotion)
 
-        music_mood = mood_map.get(
-            emotion_name.lower(),
-            emotion_name
+if st.button("Recommend Songs"):
+
+    if not user_text.strip():
+        st.warning("Please write how you feel first.")
+        st.stop()
+
+    detected_emotion = detect_emotion(user_text)
+
+    st.success(f"Detected Emotion: {detected_emotion.title()}")
+
+    songs = get_songs(
+        mood=detected_emotion,
+        language=language,
+        limit=10
+    )
+
+    if not songs:
+        st.error("No songs found. Please try another mood.")
+        st.stop()
+
+    st.subheader("Recommended Songs")
+
+    for song in songs:
+
+        st.image(
+            song["cover"],
+            width=250
         )
 
-        st.success(
-            f"Detected Emotion: {emotion_name}"
+        st.markdown(
+            f"### {song['title']}"
         )
 
-        st.info(
-            f"Music Mood: {music_mood}"
+        st.write(
+            f"Artist: {song['artist']}"
         )
 
-        songs = get_songs(music_mood)
+        st.write(
+            f"Album: {song['album']}"
+        )
 
-        st.subheader("Recommended Songs")
-
-        if not songs:
-            st.warning("No songs found. Please try again.")
-
+        if song["preview"]:
+            st.audio(song["preview"])
         else:
-            for song in songs:
+            st.write("Preview not available.")
 
-                st.markdown(
-                    f"### {song['title']}"
-                )
+        st.link_button(
+            "Listen on Deezer",
+            song["link"]
+        )
 
-                st.write(
-                    f"Artist: {song['artist']}"
-                )
-
-                st.write(
-                    f"Album: {song['album']}"
-                )
-
-                if song.get("cover"):
-                    st.image(
-                        song["cover"],
-                        width=200
-                    )
-
-                if song.get("preview"):
-                    st.audio(
-                        song["preview"],
-                        format="audio/mp3"
-                    )
-
-                else:
-                    st.write(
-                        "Preview not available for this song."
-                    )
-
-                st.divider()
       
