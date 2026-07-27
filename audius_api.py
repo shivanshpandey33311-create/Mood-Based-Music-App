@@ -1,5 +1,6 @@
 import requests
 import streamlit as st
+import random
 
 
 BASE_URL = "https://api.audius.co/v1"
@@ -51,7 +52,6 @@ MOOD_SEARCHES = {
     "angry": {
         "Hindi": [
             "hindi angry",
-            "hindi aggressive",
             "hindi energetic",
             "bollywood energetic"
         ],
@@ -112,16 +112,6 @@ def make_request(endpoint, params=None):
         return None
 
 
-def get_track_value(track, key, default=""):
-
-    value = track.get(key)
-
-    if value is None:
-        return default
-
-    return value
-
-
 def get_artist(track):
 
     user = track.get("user")
@@ -135,7 +125,7 @@ def get_artist(track):
 
     artists = track.get("artists")
 
-    if isinstance(artists, list) and artists:
+    if isinstance(artists, list):
 
         names = []
 
@@ -166,19 +156,7 @@ def get_artwork(track):
             or artwork.get("150x150")
         )
 
-    if isinstance(artwork, str):
-
-        return artwork
-
     return None
-
-
-def get_stream_url(track_id):
-
-    return (
-        f"{BASE_URL}/tracks/"
-        f"{track_id}/stream"
-    )
 
 
 def convert_track(track):
@@ -188,221 +166,63 @@ def convert_track(track):
     if not track_id:
         return None
 
-    title = get_track_value(
-        track,
-        "title",
-        "Unknown Track"
-    )
-
-    artist = get_artist(track)
-
-    genre = get_track_value(
-        track,
-        "genre",
-        ""
-    )
-
-    mood = get_track_value(
-        track,
-        "mood",
-        ""
-    )
-
-    artwork = get_artwork(track)
-
-    permalink = get_track_value(
-        track,
+    permalink = track.get(
         "permalink",
         ""
     )
 
     if permalink:
 
-        audius_url = (
-            f"https://audius.co{permalink}"
-            if permalink.startswith("/")
-            else f"https://audius.co/{permalink}"
-        )
+        if permalink.startswith("/"):
+            audius_url = (
+                f"https://audius.co{permalink}"
+            )
+        else:
+            audius_url = (
+                f"https://audius.co/{permalink}"
+            )
 
     else:
 
         audius_url = "https://audius.co"
 
-    play_count = get_track_value(
-        track,
-        "play_count",
-        0
-    )
-
-    repost_count = get_track_value(
-        track,
-        "repost_count",
-        0
-    )
-
-    favorite_count = get_track_value(
-        track,
-        "favorite_count",
-        0
-    )
-
     return {
         "id": track_id,
-        "title": title,
-        "artist": artist,
-        "genre": genre,
-        "mood": mood,
-        "artwork": artwork,
-        "stream_url": get_stream_url(track_id),
+        "title": track.get(
+            "title",
+            "Unknown Track"
+        ),
+        "artist": get_artist(track),
+        "genre": track.get(
+            "genre",
+            ""
+        ),
+        "mood": track.get(
+            "mood",
+            ""
+        ),
+        "artwork": get_artwork(track),
+        "stream_url": (
+            f"{BASE_URL}/tracks/"
+            f"{track_id}/stream"
+        ),
         "audius_url": audius_url,
-        "play_count": play_count,
-        "repost_count": repost_count,
-        "favorite_count": favorite_count
+        "play_count": track.get(
+            "play_count",
+            0
+        ),
+        "repost_count": track.get(
+            "repost_count",
+            0
+        ),
+        "favorite_count": track.get(
+            "favorite_count",
+            0
+        )
     }
 
 
-def score_track(track, emotion, language):
-
-    score = 0
-
-    title = track["title"].lower()
-    artist = track["artist"].lower()
-    genre = track["genre"].lower()
-    mood = track["mood"].lower()
-
-    emotion_words = {
-        "sad": [
-            "sad",
-            "emotional",
-            "heartbreak",
-            "melancholy",
-            "alone"
-        ],
-        "happy": [
-            "happy",
-            "party",
-            "upbeat",
-            "feel good",
-            "fun"
-        ],
-        "love": [
-            "love",
-            "romantic",
-            "romance",
-            "heart"
-        ],
-        "angry": [
-            "angry",
-            "aggressive",
-            "intense",
-            "rage",
-            "hard"
-        ],
-        "fear": [
-            "calm",
-            "peaceful",
-            "relax",
-            "ambient",
-            "chill"
-        ],
-        "surprise": [
-            "energetic",
-            "party",
-            "upbeat",
-            "dance"
-        ]
-    }
-
-    for word in emotion_words.get(emotion, []):
-
-        if word in title:
-            score += 25
-
-        if word in genre:
-            score += 15
-
-        if word in mood:
-            score += 30
-
-    if language == "Hindi":
-
-        hindi_words = [
-            "hindi",
-            "bollywood",
-            "india",
-            "indian"
-        ]
-
-        for word in hindi_words:
-
-            if word in title:
-                score += 25
-
-            if word in artist:
-                score += 10
-
-    elif language == "English":
-
-        english_words = [
-            "english",
-            "pop",
-            "rock",
-            "hip hop",
-            "r&b"
-        ]
-
-        for word in english_words:
-
-            if word in title:
-                score += 10
-
-            if word in genre:
-                score += 10
-
-    play_count = track.get(
-        "play_count",
-        0
-    )
-
-    repost_count = track.get(
-        "repost_count",
-        0
-    )
-
-    favorite_count = track.get(
-        "favorite_count",
-        0
-    )
-
-    try:
-        score += min(
-            20,
-            int(play_count) / 10000
-        )
-    except:
-        pass
-
-    try:
-        score += min(
-            10,
-            int(repost_count) / 100
-        )
-    except:
-        pass
-
-    try:
-        score += min(
-            10,
-            int(favorite_count) / 100
-        )
-    except:
-        pass
-
-    return score
-
-
-@st.cache_data(ttl=1800)
-def search_tracks(query, limit=10):
+def search_tracks(query, limit=50):
 
     params = {
         "query": query,
@@ -423,20 +243,16 @@ def search_tracks(query, limit=10):
         []
     )
 
-    results = []
+    songs = []
 
     for track in tracks:
 
-        converted = convert_track(
-            track
-        )
+        song = convert_track(track)
 
-        if converted:
-            results.append(
-                converted
-            )
+        if song:
+            songs.append(song)
 
-    return results
+    return songs
 
 
 def remove_duplicates(songs):
@@ -455,10 +271,122 @@ def remove_duplicates(songs):
             continue
 
         seen.add(key)
-
         unique.append(song)
 
     return unique
+
+
+def score_track(
+    track,
+    emotion,
+    language
+):
+
+    score = 0
+
+    title = track["title"].lower()
+    genre = track["genre"].lower()
+    mood = track["mood"].lower()
+
+    emotion_words = {
+
+        "sad": [
+            "sad",
+            "emotional",
+            "heartbreak",
+            "melancholy",
+            "alone"
+        ],
+
+        "happy": [
+            "happy",
+            "party",
+            "upbeat",
+            "feel good",
+            "fun"
+        ],
+
+        "love": [
+            "love",
+            "romantic",
+            "romance",
+            "heart"
+        ],
+
+        "angry": [
+            "angry",
+            "aggressive",
+            "intense",
+            "rage",
+            "hard"
+        ],
+
+        "fear": [
+            "calm",
+            "peaceful",
+            "relax",
+            "ambient",
+            "chill"
+        ],
+
+        "surprise": [
+            "energetic",
+            "party",
+            "upbeat",
+            "dance"
+        ]
+    }
+
+    for word in emotion_words.get(
+        emotion,
+        []
+    ):
+
+        if word in title:
+            score += 25
+
+        if word in genre:
+            score += 15
+
+        if word in mood:
+            score += 30
+
+    if language == "Hindi":
+
+        hindi_words = [
+            "hindi",
+            "bollywood",
+            "indian",
+            "india"
+        ]
+
+        for word in hindi_words:
+
+            if word in title:
+                score += 20
+
+            if word in genre:
+                score += 10
+
+    elif language == "English":
+
+        english_words = [
+            "english",
+            "pop",
+            "rock",
+            "hip hop",
+            "r&b"
+        ]
+
+        for word in english_words:
+
+            if word in title:
+                score += 10
+
+            if word in genre:
+                score += 10
+
+    return score
 
 
 def get_songs(
@@ -474,47 +402,83 @@ def get_songs(
 
     candidates = []
 
-    if language in ["Hindi", "Both"]:
+    queries = []
 
-        for query in searches["Hindi"]:
+    if language in [
+        "Hindi",
+        "Both"
+    ]:
 
-            results = search_tracks(
-                query,
-                limit=10
-            )
+        queries.extend(
+            searches["Hindi"]
+        )
 
-            candidates.extend(
-                results
-            )
+    if language in [
+        "English",
+        "Both"
+    ]:
 
-    if language in ["English", "Both"]:
+        queries.extend(
+            searches["English"]
+        )
 
-        for query in searches["English"]:
+    random.shuffle(queries)
 
-            results = search_tracks(
-                query,
-                limit=10
-            )
+    for query in queries:
 
-            candidates.extend(
-                results
-            )
+        results = search_tracks(
+            query,
+            limit=50
+        )
+
+        candidates.extend(
+            results
+        )
 
     candidates = remove_duplicates(
         candidates
     )
 
+    if not candidates:
+        return []
+
+    scored = []
+
     for song in candidates:
 
-        song["score"] = score_track(
+        score = score_track(
             song,
             emotion,
             language
         )
 
-    candidates.sort(
+        song["score"] = score
+
+        scored.append(song)
+
+    scored.sort(
         key=lambda x: x["score"],
         reverse=True
     )
 
-    return candidates[:limit]
+    strong_matches = [
+        song
+        for song in scored
+        if song["score"] >= 10
+    ]
+
+    if len(strong_matches) < limit:
+        strong_matches = scored
+
+    random.shuffle(
+        strong_matches
+    )
+
+    selected = strong_matches[:limit]
+
+    selected.sort(
+        key=lambda x: x["score"],
+        reverse=True
+    )
+
+    return selected
