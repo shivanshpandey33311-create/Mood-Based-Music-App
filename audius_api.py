@@ -1,6 +1,5 @@
-import requests
-import streamlit as st
 import random
+import requests
 
 
 BASE_URL = "https://api.audius.co/v1"
@@ -121,7 +120,7 @@ def get_artist(track):
         name = user.get("name")
 
         if name:
-            return name
+            return str(name)
 
     artists = track.get("artists")
 
@@ -136,7 +135,7 @@ def get_artist(track):
                 name = artist.get("name")
 
                 if name:
-                    names.append(name)
+                    names.append(str(name))
 
         if names:
             return ", ".join(names)
@@ -156,6 +155,10 @@ def get_artwork(track):
             or artwork.get("150x150")
         )
 
+    if isinstance(artwork, str):
+
+        return artwork
+
     return None
 
 
@@ -166,9 +169,20 @@ def convert_track(track):
     if not track_id:
         return None
 
-    permalink = track.get(
-        "permalink",
-        ""
+    title = str(
+        track.get("title") or "Unknown Track"
+    )
+
+    genre = str(
+        track.get("genre") or ""
+    )
+
+    mood = str(
+        track.get("mood") or ""
+    )
+
+    permalink = str(
+        track.get("permalink") or ""
     )
 
     if permalink:
@@ -177,6 +191,7 @@ def convert_track(track):
             audius_url = (
                 f"https://audius.co{permalink}"
             )
+
         else:
             audius_url = (
                 f"https://audius.co/{permalink}"
@@ -188,19 +203,10 @@ def convert_track(track):
 
     return {
         "id": track_id,
-        "title": track.get(
-            "title",
-            "Unknown Track"
-        ),
+        "title": title,
         "artist": get_artist(track),
-        "genre": track.get(
-            "genre",
-            ""
-        ),
-        "mood": track.get(
-            "mood",
-            ""
-        ),
+        "genre": genre,
+        "mood": mood,
         "artwork": get_artwork(track),
         "stream_url": (
             f"{BASE_URL}/tracks/"
@@ -208,17 +214,14 @@ def convert_track(track):
         ),
         "audius_url": audius_url,
         "play_count": track.get(
-            "play_count",
-            0
-        ),
+            "play_count"
+        ) or 0,
         "repost_count": track.get(
-            "repost_count",
-            0
-        ),
+            "repost_count"
+        ) or 0,
         "favorite_count": track.get(
-            "favorite_count",
-            0
-        )
+            "favorite_count"
+        ) or 0
     }
 
 
@@ -247,6 +250,9 @@ def search_tracks(query, limit=50):
 
     for track in tracks:
 
+        if not isinstance(track, dict):
+            continue
+
         song = convert_track(track)
 
         if song:
@@ -262,15 +268,24 @@ def remove_duplicates(songs):
 
     for song in songs:
 
+        title = str(
+            song.get("title") or ""
+        ).lower()
+
+        artist = str(
+            song.get("artist") or ""
+        ).lower()
+
         key = (
-            song["title"].lower(),
-            song["artist"].lower()
+            title,
+            artist
         )
 
         if key in seen:
             continue
 
         seen.add(key)
+
         unique.append(song)
 
     return unique
@@ -284,9 +299,21 @@ def score_track(
 
     score = 0
 
-    title = track["title"].lower()
-    genre = track["genre"].lower()
-    mood = track["mood"].lower()
+    title = str(
+        track.get("title") or ""
+    ).lower()
+
+    genre = str(
+        track.get("genre") or ""
+    ).lower()
+
+    mood = str(
+        track.get("mood") or ""
+    ).lower()
+
+    artist = str(
+        track.get("artist") or ""
+    ).lower()
 
     emotion_words = {
 
@@ -337,10 +364,12 @@ def score_track(
         ]
     }
 
-    for word in emotion_words.get(
+    words = emotion_words.get(
         emotion,
         []
-    ):
+    )
+
+    for word in words:
 
         if word in title:
             score += 25
@@ -368,6 +397,9 @@ def score_track(
             if word in genre:
                 score += 10
 
+            if word in artist:
+                score += 10
+
     elif language == "English":
 
         english_words = [
@@ -386,6 +418,42 @@ def score_track(
             if word in genre:
                 score += 10
 
+    try:
+
+        play_count = int(
+            track.get("play_count") or 0
+        )
+
+        score += min(
+            10,
+            play_count / 10000
+        )
+
+    except (
+        ValueError,
+        TypeError
+    ):
+
+        pass
+
+    try:
+
+        favorite_count = int(
+            track.get("favorite_count") or 0
+        )
+
+        score += min(
+            10,
+            favorite_count / 100
+        )
+
+    except (
+        ValueError,
+        TypeError
+    ):
+
+        pass
+
     return score
 
 
@@ -395,10 +463,17 @@ def get_songs(
     limit=10
 ):
 
-    searches = MOOD_SEARCHES.get(
-        emotion,
-        MOOD_SEARCHES["happy"]
-    )
+    emotion = str(
+        emotion or "happy"
+    ).lower()
+
+    if emotion not in MOOD_SEARCHES:
+
+        emotion = "happy"
+
+    searches = MOOD_SEARCHES[
+        emotion
+    ]
 
     candidates = []
 
@@ -442,43 +517,41 @@ def get_songs(
     if not candidates:
         return []
 
-    scored = []
-
     for song in candidates:
 
-        score = score_track(
+        song["score"] = score_track(
             song,
             emotion,
             language
         )
 
-        song["score"] = score
-
-        scored.append(song)
-
-    scored.sort(
-        key=lambda x: x["score"],
+    candidates.sort(
+        key=lambda x: x.get(
+            "score",
+            0
+        ),
         reverse=True
     )
 
     strong_matches = [
         song
-        for song in scored
-        if song["score"] >= 10
+        for song in candidates
+        if song.get("score", 0) >= 10
     ]
 
     if len(strong_matches) < limit:
-        strong_matches = scored
+
+        strong_matches = candidates
 
     random.shuffle(
         strong_matches
     )
 
-    selected = strong_matches[:limit]
-
-    selected.sort(
-        key=lambda x: x["score"],
-        reverse=True
-    )
+    selected = strong_matches[
+        :min(
+            limit,
+            len(strong_matches)
+        )
+    ]
 
     return selected
