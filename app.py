@@ -1,7 +1,7 @@
 import streamlit as st
 
 from emotion_model import detect_emotion
-from audius_api import get_songs
+from youtube_api import get_songs
 
 
 st.set_page_config(
@@ -35,46 +35,28 @@ EMOTION_DESCRIPTIONS = {
 if "songs" not in st.session_state:
     st.session_state["songs"] = []
 
-
 if "emotion" not in st.session_state:
     st.session_state["emotion"] = ""
-
 
 if "confidence" not in st.session_state:
     st.session_state["confidence"] = 0.0
 
-
 if "shown_song_ids" not in st.session_state:
     st.session_state["shown_song_ids"] = set()
-
 
 if "recommendation_count" not in st.session_state:
     st.session_state["recommendation_count"] = 0
 
 
-st.title(
-    "Mood-Based Music Recommendation"
+st.title("Mood-Based Music Recommendation")
+
+user_text = st.text_area(
+    "How are you feeling?",
+    height=120
 )
-
-st.write(
-    "Describe how you feel and get music recommendations based on your detected emotion."
-)
-
-
-with st.container():
-
-    user_text = st.text_area(
-        "How are you feeling?",
-        placeholder=(
-            "Example: I am feeling very sad "
-            "because I miss someone today."
-        ),
-        height=130
-    )
-
 
 language = st.selectbox(
-    "Choose music language",
+    "Language",
     [
         "Both",
         "Hindi",
@@ -83,35 +65,30 @@ language = st.selectbox(
 )
 
 
-col1, col2 = st.columns(
-    [3, 1]
-)
-
+col1, col2 = st.columns(2)
 
 with col1:
 
-    recommend_button = st.button(
+    recommend = st.button(
         "Recommend Songs",
-        type="primary",
         use_container_width=True
     )
 
-
 with col2:
 
-    reset_button = st.button(
+    reset = st.button(
         "Reset",
         use_container_width=True
     )
 
 
-if reset_button:
+if reset:
 
     st.session_state["songs"] = []
 
     st.session_state["emotion"] = ""
 
-    st.session_state["confidence"] = 0.0
+    st.session_state["confidence"] = 0
 
     st.session_state["shown_song_ids"] = set()
 
@@ -120,79 +97,37 @@ if reset_button:
     st.rerun()
 
 
-if recommend_button:
+if recommend:
 
     if not user_text.strip():
 
         st.warning(
-            "Please describe how you feel first."
+            "Enter your feelings first."
         )
 
         st.stop()
 
-    with st.spinner(
-        "Analyzing your emotion..."
-    ):
-
-        try:
-
-            emotion, confidence = detect_emotion(
-                user_text.strip()
-            )
-
-        except Exception as error:
-
-            st.error(
-                "The emotion model could not be loaded."
-            )
-
-            st.exception(
-                error
-            )
-
-            st.stop()
+    emotion, confidence = detect_emotion(
+        user_text
+    )
 
     st.session_state["emotion"] = emotion
 
     st.session_state["confidence"] = confidence
 
-    with st.spinner(
-        "Finding the best matching songs..."
-    ):
-
-        try:
-
-            songs = get_songs(
-                emotion=emotion,
-                language=language,
-                limit=10,
-                exclude_ids=(
-                    st.session_state["shown_song_ids"]
-                )
-            )
-
-        except Exception as error:
-
-            st.error(
-                "Something went wrong while finding songs."
-            )
-
-            st.exception(
-                error
-            )
-
-            st.stop()
+    songs = get_songs(
+        emotion=emotion,
+        language=language,
+        limit=10,
+        exclude_ids=st.session_state["shown_song_ids"]
+    )
 
     st.session_state["songs"] = songs
 
     for song in songs:
 
-        song_id = str(
-            song.get("id")
-        )
-
         st.session_state["shown_song_ids"].add(
-            song_id
+            song["id"]
         )
 
     st.session_state["recommendation_count"] += 1
@@ -200,170 +135,65 @@ if recommend_button:
 
 if st.session_state["emotion"]:
 
-    emotion = st.session_state["emotion"]
+    st.subheader("Emotion Analysis")
 
-    confidence = st.session_state["confidence"]
-
-    st.divider()
-
-    st.subheader(
-        "Emotion Analysis"
+    st.write(
+        f"Emotion: {st.session_state['emotion'].title()}"
     )
 
-    col1, col2, col3 = st.columns(
-        3
-    )
-
-    with col1:
-
-        st.metric(
-            "Detected Emotion",
-            emotion.title()
-        )
-
-    with col2:
-
-        st.metric(
-            "Confidence",
-            f"{confidence:.1f}%"
-        )
-
-    with col3:
-
-        st.metric(
-            "Language",
-            language
-        )
-
-    description = EMOTION_DESCRIPTIONS.get(
-        emotion,
-        "Your emotion was detected from the text."
+    st.write(
+        f"Confidence: {st.session_state['confidence']:.1f}%"
     )
 
     st.info(
-        description
+        EMOTION_DESCRIPTIONS.get(
+            st.session_state["emotion"],
+            ""
+        )
     )
 
 
-songs = st.session_state["songs"]
-
-
-if songs:
-
-    st.divider()
+if st.session_state["songs"]:
 
     st.subheader(
-        f"Recommendations for "
-        f"{st.session_state['emotion'].title()} Mood"
+        f"Recommendations for {st.session_state['emotion'].title()}"
     )
 
-    st.caption(
-        "Recommendation set "
-        f"#{st.session_state['recommendation_count']}"
-    )
+    for i, song in enumerate(
+        st.session_state["songs"],
+        start=1
+    ):
 
-    for index, song in enumerate(songs):
-
-        title = song.get(
-            "title",
-            "Unknown Track"
+        st.markdown(
+            f"### {i}. {song['title']}"
         )
 
-        artist = song.get(
-            "artist",
-            "Unknown Artist"
+        st.write(
+            f"Artist: {song['artist']}"
         )
 
-        artwork = song.get(
-            "artwork"
-        )
+        if song.get("artwork"):
 
-        genre = song.get(
-            "genre",
-            ""
-        )
-
-        mood = song.get(
-            "mood",
-            ""
-        )
-
-        stream_url = song.get(
-            "stream_url"
-        )
-
-        audius_url = song.get(
-            "audius_url"
-        )
-
-        col1, col2 = st.columns(
-            [1, 4]
-        )
-
-        with col1:
-
-            if artwork:
-
-                st.image(
-                    artwork,
-                    use_container_width=True
-                )
-
-            else:
-
-                st.write(
-                    "No artwork"
-                )
-
-        with col2:
-
-            st.markdown(
-                f"### {index + 1}. {title}"
+            st.image(
+                song["artwork"],
+                width=250
             )
 
-            st.write(
-                f"Artist: {artist}"
-            )
+        st.video(
+            song["stream_url"]
+        )
 
-            metadata = []
-
-            if genre:
-                metadata.append(
-                    f"Genre: {genre}"
-                )
-
-            if mood:
-                metadata.append(
-                    f"Mood: {mood}"
-                )
-
-            if metadata:
-
-                st.caption(
-                    " | ".join(metadata)
-                )
-
-            if stream_url:
-
-                st.audio(
-                    stream_url
-                )
-
-            if audius_url:
-
-                st.link_button(
-                    "Open on Audius",
-                    audius_url
-                )
+        st.link_button(
+            "Watch on YouTube",
+            song["stream_url"]
+        )
 
         st.divider()
 
+elif st.session_state["emotion"]:
 
-elif (
-    st.session_state["emotion"]
-    and not songs
-):
-
-    st.warning(
-        "No suitable songs were found for this combination. Try Both language or another mood description."
+    st.error(
+        "No recommendations found."
     )
+
+
